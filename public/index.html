@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ExchangeRate RPS - Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Plaar Tech — ExchangeRate RPS</div>
+    <div class="meta">
+      <span id="rate-display">Rate: --</span>
+      <select id="base-select">
+        <option value="USD">USD</option>
+        <option value="EUR">EUR</option>
+      </select>
+      <select id="target-select">
+        <option value="EUR">EUR</option>
+        <option value="PKR">PKR</option>
+        <option value="USD">USD</option>
+      </select>
+      <button id="refresh-btn">Refresh</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="left">
+      <div class="card">
+        <h2>Live Rate</h2>
+        <div class="value" id="live-rate">--</div>
+        <div class="small" id="fetched-at">--</div>
+      </div>
+
+      <div class="card">
+        <h2>Rock — Paper — Scissors</h2>
+        <div class="rps">
+          <button class="rps-btn" data-move="rock">✊ Rock</button>
+          <button class="rps-btn" data-move="paper">✋ Paper</button>
+          <button class="rps-btn" data-move="scissors">✌️ Scissors</button>
+        </div>
+        <div id="rps-result" class="result">Make a move</div>
+      </div>
+    </section>
+
+    <section class="right">
+      <div class="card">
+        <h2>Recent Calls (client-side)</h2>
+        <table id="history-table">
+          <thead><tr><th>Time</th><th>Base→Target</th><th>Rate</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Quick Stats</h2>
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-num" id="calls-count">0</div><div class="stat-label">Calls</div></div>
+          <div class="stat"><div class="stat-num" id="last-latency">--</div><div class="stat-label">Last latency ms</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">Built for MLOps RPS Project • Student A</footer>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

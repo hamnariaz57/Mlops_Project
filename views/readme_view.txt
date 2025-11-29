@@ -1,0 +1,1 @@
+This project uses a professional dashboard UI and serves static files from /public.

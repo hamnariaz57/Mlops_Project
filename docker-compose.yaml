@@ -1,0 +1,161 @@
+#version: "3.8"
+#services:
+#  postgres:
+#    image: postgres:13
+#    environment:
+#      POSTGRES_USER: airflow
+#      POSTGRES_PASSWORD: airflow
+#      POSTGRES_DB: airflow
+#    volumes:
+#      - postgres-db:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD", "pg_isready", "-U", "airflow"]
+#      interval: 5s
+#      timeout: 5s
+#      retries: 5
+#
+#  airflow-init:
+#    image: apache/airflow:2.7.1
+#    entrypoint: /bin/bash
+#    command:
+#      - -c
+#      - |
+#        airflow db init &&
+#        airflow users create \
+#          --username admin \
+#          --firstname Admin \
+#          --lastname User \
+#          --role Admin \
+#          --email admin@example.com \
+#          --password admin
+#    environment:
+#      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#    volumes:
+#      - ./dags:/opt/airflow/dags
+#
+#  airflow-webserver:
+#    image: apache/airflow:2.7.1
+#    command: webserver
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      airflow-init:
+#        condition: service_completed_successfully
+#    volumes:
+#      - ./dags:/opt/airflow/dags
+#
+#  airflow-scheduler:
+#    image: apache/airflow:2.7.1
+#    command: scheduler
+#    environment:
+#      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      airflow-init:
+#        condition: service_completed_successfully
+#    volumes:
+#      - ./dags:/opt/airflow/dags
+#
+#volumes:
+#  postgres-db:
+
+
+
+
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    image: apache/airflow:2.7.1
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init &&
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: my_super_secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./dags:/opt/airflow/dags
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: my_super_secret_key
+
+      # 🔥 Fix log issue
+      AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT:
+      AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT:
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__WEBSERVER__SECRET_KEY: my_super_secret_key
+
+      # 🔥 Fix log issue
+      AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT:
+      AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT:
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+
+volumes:
+  postgres-db:
