@@ -1,41 +1,55 @@
-node_modules/
-logs/
-.env
+# OS junk files
 .DS_Store
 
-# Python
+# Node.js
+node_modules/
+logs/
+
+# Environment variables
+.env
+
+# Python bytecode + caches
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
+
+# Python virtual environments
+.venv/
 env/
 venv/
 ENV/
+.Python
+
+# Build artifacts
 build/
 dist/
 *.egg-info/
 
-# Airflow
+# Airflow artifacts
 airflow.db
 airflow.cfg
 unittests.cfg
 
-# MLflow
+# MLflow artifacts - tracked remotely
 mlruns/
 mlflow.db
+rf_model.pkl
+*.pkl
 
-# Data (tracked by DVC)
-data/raw/*.csv
-data/processed/*.csv
+# DVC - allow only small placeholder files
+data/raw/
+data/processed/
 !data/processed/*.dvc
 
 # Reports
 reports/*.html
 reports/*.json
 
-# IDE
+# IDE/project config
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Temporary helper scripts (do not track)
+generate_dataset.py
