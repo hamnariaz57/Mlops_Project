@@ -6,6 +6,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import mlflow
 import joblib
+import json
+from pathlib import Path
 
 DATA_PATH = "data/processed/exchange_rates.csv"
 TARGET_COL = "EUR"
@@ -130,11 +132,37 @@ def train():
         joblib.dump(model, model_path)
         mlflow.log_artifact(model_path)
 
+        # Save training data statistics for drift detection
+        training_stats = {
+            "features": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        for col in X_train.columns:
+            training_stats["features"][col] = {
+                "min": float(X_train[col].min()),
+                "max": float(X_train[col].max()),
+                "mean": float(X_train[col].mean()),
+                "std": float(X_train[col].std())
+            }
+        
+        stats_path = "training_stats.json"
+        with open(stats_path, 'w') as f:
+            json.dump(training_stats, f, indent=2)
+        
+        # Save to models directory for service to use
+        Path("models").mkdir(exist_ok=True)
+        models_stats_path = "models/training_stats.json"
+        with open(models_stats_path, 'w') as f:
+            json.dump(training_stats, f, indent=2)
+        
+        mlflow.log_artifact(stats_path)
+        
         run_id = mlflow.active_run().info.run_id
 
         print("🎯 Model trained and logged to MLflow successfully!")
         print(f"Run ID: {run_id}")
         print(f"RMSE: {rmse:.4f}, MAE: {mae:.4f}, R2: {r2:.4f}")
+        print(f"✓ Training statistics saved for drift detection")
 
 if __name__ == "__main__":
     train()
