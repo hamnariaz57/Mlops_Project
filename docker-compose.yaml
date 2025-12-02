@@ -28,6 +28,8 @@ services:
           --role Admin \
           --email admin@example.com \
           --password admin
+    env_file:
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -49,6 +51,8 @@ services:
     command: webserver
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -70,6 +74,8 @@ services:
   airflow-scheduler:
     build: .
     command: scheduler
+    env_file:
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -100,6 +106,8 @@ services:
       --port 5000
     volumes:
       - mlflow-data:/mlflow
+    env_file:
+      - .env
     environment:
       MLFLOW_TRACKING_USERNAME: ${DAGSHUB_USERNAME:-}
       MLFLOW_TRACKING_PASSWORD: ${DAGSHUB_TOKEN:-}

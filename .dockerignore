@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+*.md
+docs/
+
+# Data (not needed in container)
+data/
+reports/
+logs/
+
+# Airflow specific
+dags/
+airflow.cfg
+
+# Node.js (if any)
+node_modules/
+package-lock.json
+
+# Docker
+Dockerfile
+docker-compose.yaml
+.dockerignore
+
+# CI/CD
+.github/
+
+# Environment files (secrets should be passed as env vars)
+.env
+.env.local
+
+# Model files (will be downloaded in container)
+*.pkl
+models/
+
+# Backup files
+*_backup_*.csv
+

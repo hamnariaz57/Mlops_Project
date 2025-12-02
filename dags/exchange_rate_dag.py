@@ -13,7 +13,12 @@ import numpy as np
 import json
 import os
 import subprocess
+import shutil
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import for data profiling and MLflow
 try:
@@ -227,7 +232,7 @@ def transform_and_engineer_features(**context):
     )
     timestamp = context['task_instance'].xcom_pull(
         task_ids='extract_data',
-        key='time'
+        key='timestamp'
     )
     
     # Load raw data
@@ -254,20 +259,76 @@ def transform_and_engineer_features(**context):
     historical_file = PROCESSED_DATA_DIR / "exchange_rates.csv"
     
     if historical_file.exists():
-        historical_df = pd.read_csv(historical_file)
-        historical_df['collection_datetime'] = pd.to_datetime(historical_df['collection_datetime'])
+        try:
+            # Try to read CSV with error handling for malformed rows
+            try:
+                # Try with newer pandas API first
+                historical_df = pd.read_csv(
+                    historical_file,
+                    on_bad_lines='skip',  # Skip malformed lines
+                    engine='python',  # Use Python engine for better error handling
+                    warn_bad_lines=False
+                )
+            except TypeError:
+                # Fallback for older pandas versions
+                historical_df = pd.read_csv(
+                    historical_file,
+                    error_bad_lines=False,
+                    warn_bad_lines=False,
+                    engine='python'
+                )
+            
+            # If file is empty or has no valid data, skip historical
+            if historical_df.empty or len(historical_df) == 0:
+                print("⚠ Historical file exists but is empty - skipping historical data")
+                historical_df = None
+            else:
+                # Ensure collection_datetime column exists and convert
+                if 'collection_datetime' in historical_df.columns:
+                    historical_df['collection_datetime'] = pd.to_datetime(historical_df['collection_datetime'], errors='coerce')
+                    # Remove rows with invalid dates
+                    historical_df = historical_df.dropna(subset=['collection_datetime'])
+                else:
+                    print("⚠ Historical file missing collection_datetime - skipping historical data")
+                    historical_df = None
+                    
+        except Exception as e:
+            print(f"⚠ Error reading historical file: {str(e)}")
+            print("⚠ Skipping historical data and creating new file")
+            historical_df = None
         
-        # Combine with historical data
-        combined_df = pd.concat([historical_df, df], ignore_index=True)
-        combined_df = combined_df.sort_values('collection_datetime').reset_index(drop=True)
+        if historical_df is not None and not historical_df.empty:
+            # Ensure column alignment - only keep columns that exist in both
+            common_cols = [col for col in df.columns if col in historical_df.columns]
+            if len(common_cols) < 5:  # Too few common columns, likely incompatible
+                print("⚠ Historical data has incompatible structure - skipping historical data")
+                historical_df = None
+            else:
+                # Align columns
+                historical_df = historical_df[common_cols]
+                df_aligned = df[common_cols]
+                
+                # Combine with historical data
+                combined_df = pd.concat([historical_df, df_aligned], ignore_index=True)
+                combined_df = combined_df.sort_values('collection_datetime').reset_index(drop=True)
+        else:
+            combined_df = None
+    else:
+        combined_df = None
+    
+    if combined_df is not None and not combined_df.empty:
         
         print(f"✓ Combined with historical data: {combined_df.shape}")
         
-        # Get currency columns
-        currency_columns = [col for col in combined_df.columns 
-                           if col not in ['timestamp', 'collection_datetime', 'base_currency', 
-                                         'api_date', 'time_last_updated', 'day_of_week', 
-                                         'day_of_month', 'month', 'quarter', 'year', 'hour']]
+        # Get currency columns (exclude metadata and time features)
+        exclude_cols = ['timestamp', 'collection_datetime', 'base_currency', 
+                       'api_date', 'time_last_updated', 'day_of_week', 
+                       'day_of_month', 'month', 'quarter', 'year', 'hour']
+        # Also exclude any existing feature columns (lag, rolling, etc.)
+        exclude_cols.extend([col for col in combined_df.columns 
+                            if any(x in col for x in ['_lag', '_rolling', '_pct_change'])])
+        
+        currency_columns = [col for col in combined_df.columns if col not in exclude_cols]
         
         # 3. Create lag features for major currencies (last 1, 7, 30 observations)
         major_currencies = ['EUR', 'GBP', 'JPY', 'CAD', 'AUD']
@@ -304,10 +365,61 @@ def transform_and_engineer_features(**context):
     # ========== Save Processed Data ==========
     processed_file_path = PROCESSED_DATA_DIR / "exchange_rates.csv"
     
-    # If historical exists, append; otherwise create new
+    # Always read existing file first to check structure, then append or recreate
     if historical_file.exists():
-        df_final.to_csv(processed_file_path, mode='a', header=False, index=False)
-        print(f"✓ Appended to: {processed_file_path}")
+        try:
+            # Check if we can read the file properly
+            test_read = pd.read_csv(processed_file_path, nrows=1)
+            # Check if columns match
+            if set(test_read.columns) == set(df_final.columns):
+                # Structure matches, safe to append
+                df_final.to_csv(processed_file_path, mode='a', header=False, index=False)
+                print(f"✓ Appended to: {processed_file_path}")
+            else:
+                # Structure doesn't match - backup old file and create new
+                backup_path = PROCESSED_DATA_DIR / f"exchange_rates_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                shutil.copy2(processed_file_path, backup_path)
+                print(f"⚠ Column structure mismatch - backed up old file to {backup_path}")
+                # Load all valid historical data and combine
+                try:
+                    try:
+                        historical_all = pd.read_csv(processed_file_path, on_bad_lines='skip', engine='python', warn_bad_lines=False)
+                    except TypeError:
+                        historical_all = pd.read_csv(processed_file_path, error_bad_lines=False, warn_bad_lines=False, engine='python')
+                    if not historical_all.empty and 'collection_datetime' in historical_all.columns:
+                        historical_all['collection_datetime'] = pd.to_datetime(historical_all['collection_datetime'], errors='coerce')
+                        historical_all = historical_all.dropna(subset=['collection_datetime'])
+                        # Keep only common columns
+                        common_cols = [col for col in df_final.columns if col in historical_all.columns]
+                        if len(common_cols) > 5:
+                            historical_all = historical_all[common_cols]
+                            df_final_aligned = df_final[common_cols]
+                            combined_all = pd.concat([historical_all, df_final_aligned], ignore_index=True)
+                            combined_all = combined_all.sort_values('collection_datetime').reset_index(drop=True)
+                            combined_all.to_csv(processed_file_path, index=False)
+                            print(f"✓ Recreated file with aligned structure: {processed_file_path}")
+                        else:
+                            # Too incompatible, start fresh
+                            df_final.to_csv(processed_file_path, index=False)
+                            print(f"✓ Created new file (structure too incompatible): {processed_file_path}")
+                    else:
+                        df_final.to_csv(processed_file_path, index=False)
+                        print(f"✓ Created new file: {processed_file_path}")
+                except Exception as e:
+                    print(f"⚠ Could not recover historical data: {str(e)}")
+                    df_final.to_csv(processed_file_path, index=False)
+                    print(f"✓ Created new file: {processed_file_path}")
+        except Exception as e:
+            print(f"⚠ Error checking file structure: {str(e)}")
+            # Backup and create new
+            try:
+                backup_path = PROCESSED_DATA_DIR / f"exchange_rates_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                shutil.copy2(processed_file_path, backup_path)
+                print(f"⚠ Backed up corrupted file to {backup_path}")
+            except:
+                pass
+            df_final.to_csv(processed_file_path, index=False)
+            print(f"✓ Created new file: {processed_file_path}")
     else:
         df_final.to_csv(processed_file_path, index=False)
         print(f"✓ Created new file: {processed_file_path}")

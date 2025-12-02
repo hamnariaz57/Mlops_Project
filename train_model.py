@@ -19,10 +19,16 @@ def load_data():
         # Fallback for older pandas versions
         df = pd.read_csv(DATA_PATH, error_bad_lines=False, warn_bad_lines=False)
     
+    if df.empty:
+        raise ValueError(f"Data file {DATA_PATH} is empty. Please run the Airflow DAG to collect data first.")
+    
     # Select only the columns we need
     required_cols = [TIMESTAMP_COL, TARGET_COL]
     available_cols = [col for col in required_cols if col in df.columns]
-    df = df[available_cols + [col for col in df.columns if col not in required_cols and col in ['EUR', 'GBP', 'PKR', 'CAD', 'AUD']]]
+    
+    # Check if required columns exist
+    if TARGET_COL not in df.columns:
+        raise ValueError(f"Target column '{TARGET_COL}' not found in data. Available columns: {list(df.columns)}")
     
     # Keep only essential columns
     essential_cols = [TIMESTAMP_COL, TARGET_COL]
@@ -31,14 +37,42 @@ def load_data():
     df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL], errors='coerce')
     df = df.dropna(subset=[TIMESTAMP_COL, TARGET_COL])
     df = df.sort_values(TIMESTAMP_COL)
+    
+    if df.empty:
+        raise ValueError(f"After filtering, no valid data remains. Please check your data file.")
+    
     return df
 
 def create_lags(df, n_lags=3):
+    """
+    Create lag features for time series prediction.
+    Requires at least n_lags + 1 rows of data.
+    """
+    min_required_rows = n_lags + 1
+    
+    if len(df) < min_required_rows:
+        raise ValueError(
+            f"Insufficient data for training! "
+            f"Need at least {min_required_rows} rows, but only have {len(df)} rows. "
+            f"Please run the Airflow DAG multiple times to collect more data, or reduce n_lags."
+        )
+    
+    # Create lag features
     for lag in range(1, n_lags + 1):
         df[f"lag_{lag}"] = df[TARGET_COL].shift(lag)
+    
+    # Drop rows with NaN (first n_lags rows will have NaN in lag columns)
     df = df.dropna()
+    
+    if len(df) == 0:
+        raise ValueError(
+            f"After creating lag features, no valid data remains. "
+            f"This should not happen if you have at least {min_required_rows} rows."
+        )
+    
     X = df[[f"lag_{i}" for i in range(1, n_lags + 1)]]
     y = df[TARGET_COL]
+    
     return X, y
 
 def train():
@@ -53,9 +87,25 @@ def train():
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "exchange_rate_forecasting"))
 
     df = load_data()
+    print(f"✓ Loaded {len(df)} rows of data")
+    
     X, y = create_lags(df)
+    print(f"✓ Created lag features: {len(X)} samples available")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
+    # Check if we have enough data for train/test split
+    if len(X) < 2:
+        raise ValueError(
+            f"Not enough data for train/test split! "
+            f"Need at least 2 samples after creating lags, but only have {len(X)}. "
+            f"Please collect more data by running the Airflow DAG multiple times."
+        )
+    
+    # Adjust test_size if we have very few samples
+    if len(X) < 10:
+        print(f"⚠ Warning: Only {len(X)} samples available. Using all data for training (no test split).")
+        X_train, X_test, y_train, y_test = X, X, y, y
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
 
     with mlflow.start_run(run_name="rf_exchange_rate"):
         model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)

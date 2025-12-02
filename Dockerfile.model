@@ -1,0 +1,47 @@
+# Dockerfile for Model Service (FastAPI)
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt /app/requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application files
+COPY service.py /app/service.py
+COPY fetch_model.py /app/fetch_model.py
+
+# Create directory for model
+RUN mkdir -p /app/models
+
+# Build arguments for model
+ARG MLFLOW_RUN_ID
+ARG MODEL_PATH=/app/models/rf_model.pkl
+
+# Environment variables (can be overridden at runtime)
+ENV MLFLOW_TRACKING_URI=https://dagshub.com/hamnariaz57/Mlops_Project.mlflow
+ENV MODEL_PATH=${MODEL_PATH}
+
+# Note: Model will be downloaded at runtime if MODEL_PATH doesn't exist
+# This allows flexibility - model can be baked into image or downloaded at startup
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "service:app", "--host", "0.0.0.0", "--port", "8000"]
+
