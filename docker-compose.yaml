@@ -14,7 +14,7 @@ services:
       retries: 5
 
   airflow-init:
-    image: apache/airflow:2.7.1
+    build: .
     entrypoint: /bin/bash
     command:
       - -c
@@ -45,7 +45,7 @@ services:
       - ./.git:/opt/airflow/.git
 
   airflow-webserver:
-    image: apache/airflow:2.7.1
+    build: .
     command: webserver
     ports:
       - "8080:8080"
@@ -68,7 +68,7 @@ services:
       - ./.git:/opt/airflow/.git
 
   airflow-scheduler:
-    image: apache/airflow:2.7.1
+    build: .
     command: scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
