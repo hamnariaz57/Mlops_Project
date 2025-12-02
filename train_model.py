@@ -12,8 +12,24 @@ TARGET_COL = "EUR"
 TIMESTAMP_COL = "collection_datetime"
 
 def load_data():
-    df = pd.read_csv(DATA_PATH)
-    df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL])
+    # Read CSV and handle potential parsing errors
+    try:
+        df = pd.read_csv(DATA_PATH, on_bad_lines='skip')
+    except TypeError:
+        # Fallback for older pandas versions
+        df = pd.read_csv(DATA_PATH, error_bad_lines=False, warn_bad_lines=False)
+    
+    # Select only the columns we need
+    required_cols = [TIMESTAMP_COL, TARGET_COL]
+    available_cols = [col for col in required_cols if col in df.columns]
+    df = df[available_cols + [col for col in df.columns if col not in required_cols and col in ['EUR', 'GBP', 'PKR', 'CAD', 'AUD']]]
+    
+    # Keep only essential columns
+    essential_cols = [TIMESTAMP_COL, TARGET_COL]
+    df = df[[col for col in essential_cols if col in df.columns]]
+    
+    df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL], errors='coerce')
+    df = df.dropna(subset=[TIMESTAMP_COL, TARGET_COL])
     df = df.sort_values(TIMESTAMP_COL)
     return df
 
@@ -26,7 +42,14 @@ def create_lags(df, n_lags=3):
     return X, y
 
 def train():
-    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    # Set MLflow tracking URI
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/hamnariaz57/Mlops_Project.mlflow")
+    mlflow.set_tracking_uri(tracking_uri)
+    
+    # Set MLflow credentials for Dagshub
+    os.environ['MLFLOW_TRACKING_USERNAME'] = os.getenv('DAGSHUB_USERNAME', os.getenv('MLFLOW_TRACKING_USERNAME', ''))
+    os.environ['MLFLOW_TRACKING_PASSWORD'] = os.getenv('DAGSHUB_TOKEN', os.getenv('MLFLOW_TRACKING_PASSWORD', ''))
+    
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "exchange_rate_forecasting"))
 
     df = load_data()
